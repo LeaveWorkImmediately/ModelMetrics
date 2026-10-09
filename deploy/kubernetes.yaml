@@ -65,6 +65,26 @@ data:
       evaluation_interval: 15s
 
     scrape_configs:
+      # Optional: targets appear only when the MindCluster exporter is deployed.
+      - job_name: npu-exporter
+        metrics_path: /metrics
+        scheme: http
+        kubernetes_sd_configs:
+          - role: pod
+            namespaces:
+              names: [npu-exporter]
+        relabel_configs:
+          - source_labels: [__meta_kubernetes_pod_phase]
+            regex: Running
+            action: keep
+          - source_labels: [__meta_kubernetes_pod_label_app]
+            regex: npu-exporter
+            action: keep
+          - source_labels: [__meta_kubernetes_pod_ip]
+            target_label: __address__
+            replacement: $1:8082
+          - source_labels: [__meta_kubernetes_pod_node_name]
+            target_label: node
       - job_name: modelflow-router
         metrics_path: /metrics
         scheme: http
@@ -127,6 +147,7 @@ spec:
         app.kubernetes.io/name: model-metrics
         app.kubernetes.io/component: prometheus
         app.kubernetes.io/part-of: modelpilot
+        app: prometheus
     spec:
       serviceAccountName: model-metrics
       automountServiceAccountToken: true
@@ -263,3 +284,13 @@ spec:
       ports:
         - protocol: TCP
           port: 9090
+    - to:
+        - namespaceSelector:
+            matchLabels:
+              kubernetes.io/metadata.name: npu-exporter
+          podSelector:
+            matchLabels:
+              app: npu-exporter
+      ports:
+        - protocol: TCP
+          port: 8082
