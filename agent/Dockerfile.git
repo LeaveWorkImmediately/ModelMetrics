@@ -1,4 +1,3 @@
-# Ouroboros/Kaniko: build context is this Dockerfile alone.
 FROM golang:1.23-bookworm AS build
 ARG HTTP_PROXY
 ARG HTTPS_PROXY
@@ -8,7 +7,12 @@ ARG GIT_REPO_URL
 ARG GIT_REF=main
 ARG GIT_TOKEN
 ARG CACHEBUST=1
-RUN test -n "${CACHEBUST}" && test -n "${GIT_REPO_URL}" && \
+RUN git config --global http.sslVerify false && \
+    git_proxy="${HTTPS_PROXY:-${HTTP_PROXY}}" && \
+    if [ -n "$git_proxy" ]; then \
+      git config --global http.proxy "$git_proxy"; \
+    fi && \
+    test -n "${CACHEBUST}" && test -n "${GIT_REPO_URL}" && \
     if [ -z "${GIT_TOKEN}" ]; then \
       git clone --depth 1 -b "${GIT_REF}" "${GIT_REPO_URL}" /source; \
     else \
