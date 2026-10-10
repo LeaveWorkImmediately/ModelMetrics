@@ -1,0 +1,149 @@
+# Optional device collection. Replace image with an immutable tag/digest.
+# Namespace monitoring is created by the existing ModelMetrics installation.
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: model-device-agent-config
+  namespace: monitoring
+data:
+  CLUSTER_ID: installation-local
+  DASHBOARD_URL: http://model-dashboard.default.svc.cluster.local:8000
+  INVENTORY_PROFILE_VERIFIED: "false"
+  ASCEND_MODEL: unknown
+  DCMI_LIBRARY_PATH: /usr/local/Ascend/driver/lib64/driver/libdcmi.so
+  LD_LIBRARY_PATH: /usr/local/Ascend/driver/lib64:/usr/local/Ascend/driver/lib64/driver:/usr/local/Ascend/driver/lib64/common
+  NO_PROXY: .svc,.svc.cluster.local,kubernetes.default.svc
+---
+apiVersion: v1
+kind: ServiceAccount
+metadata:
+  name: model-device-agent
+  namespace: monitoring
+---
+apiVersion: rbac.authorization.k8s.io/v1
+kind: ClusterRole
+metadata:
+  name: model-device-agent
+rules:
+  - apiGroups: [""]
+    resources: [nodes]
+    verbs: [get]
+---
+apiVersion: rbac.authorization.k8s.io/v1
+kind: ClusterRoleBinding
+metadata:
+  name: model-device-agent
+roleRef:
+  apiGroup: rbac.authorization.k8s.io
+  kind: ClusterRole
+  name: model-device-agent
+subjects:
+  - kind: ServiceAccount
+    name: model-device-agent
+    namespace: monitoring
+---
+apiVersion: apps/v1
+kind: DaemonSet
+metadata:
+  name: model-device-agent
+  namespace: monitoring
+  labels: &labels
+    app.kubernetes.io/name: model-device-agent
+    app.kubernetes.io/component: device-agent
+    app.kubernetes.io/part-of: modelpilot
+spec:
+  selector:
+    matchLabels:
+      app.kubernetes.io/name: model-device-agent
+  template:
+    metadata:
+      labels: *labels
+    spec:
+      serviceAccountName: model-device-agent
+      terminationGracePeriodSeconds: 15
+      nodeSelector:
+        modelpilot.io/device-observation: "true"
+      containers:
+        - name: agent
+          image: REGISTRY/modelpilot/model-device-agent:IMMUTABLE_TAG
+          imagePullPolicy: IfNotPresent
+          envFrom:
+            - configMapRef:
+                name: model-device-agent-config
+          env:
+            - name: NODE_NAME
+              valueFrom:
+                fieldRef:
+                  fieldPath: spec.nodeName
+          ports:
+            - name: health
+              containerPort: 8081
+          startupProbe:
+            httpGet: {path: /healthz, port: health}
+            periodSeconds: 5
+            failureThreshold: 30
+          livenessProbe:
+            httpGet: {path: /healthz, port: health}
+            periodSeconds: 15
+          readinessProbe:
+            httpGet: {path: /readyz, port: health}
+            periodSeconds: 15
+          resources:
+            requests: {cpu: 50m, memory: 32Mi}
+            limits: {cpu: 250m, memory: 96Mi}
+          # DCMI requires host device access. Privileged only on selected nodes;
+          # use an organization-approved device-access profile before enabling.
+          securityContext:
+            privileged: true
+            readOnlyRootFilesystem: true
+          volumeMounts:
+            - {name: driver, mountPath: /usr/local/Ascend/driver, readOnly: true}
+            - {name: devices, mountPath: /dev, readOnly: true}
+            - {name: machine-token, mountPath: /var/run/device-token, readOnly: true}
+      volumes:
+        - name: driver
+          hostPath: {path: /usr/local/Ascend/driver, type: Directory}
+        - name: devices
+          hostPath: {path: /dev, type: Directory}
+        - name: machine-token
+          projected:
+            sources:
+              - serviceAccountToken:
+                  audience: modeldashboard-device-observation
+                  expirationSeconds: 3600
+                  path: token
+---
+apiVersion: v1
+kind: Service
+metadata:
+  name: model-device-agent
+  namespace: monitoring
+spec:
+  selector: {app.kubernetes.io/name: model-device-agent}
+  ports: [{name: health, port: 8081, targetPort: health}]
+---
+apiVersion: networking.k8s.io/v1
+kind: NetworkPolicy
+metadata:
+  name: model-device-agent
+  namespace: monitoring
+spec:
+  podSelector:
+    matchLabels: {app.kubernetes.io/name: model-device-agent}
+  policyTypes: [Ingress, Egress]
+  ingress: []
+  egress:
+    - to:
+        - namespaceSelector:
+            matchLabels: {kubernetes.io/metadata.name: default}
+          podSelector:
+            matchLabels: {app.kubernetes.io/name: model-dashboard}
+      ports: [{protocol: TCP, port: 8000}]
+    - to:
+        - namespaceSelector:
+            matchLabels: {kubernetes.io/metadata.name: kube-system}
+      ports: [{protocol: UDP, port: 53}, {protocol: TCP, port: 53}]
+    # Installation input: replace API Service IP and endpoint CIDR.
+    - to:
+        - ipBlock: {cidr: 10.43.0.1/32}
+      ports: [{protocol: TCP, port: 443}]

@@ -1,0 +1,59 @@
+# Adapted from mind-cluster commit 7537ed628111e89f82e4823cd36b2c983d86ab6b.
+# Installation input: verified exporter image digest and driver/runtime paths.
+apiVersion: v1
+kind: Namespace
+metadata: {name: npu-exporter}
+---
+apiVersion: apps/v1
+kind: DaemonSet
+metadata:
+  name: npu-exporter
+  namespace: npu-exporter
+  labels: {app.kubernetes.io/part-of: modelpilot}
+spec:
+  selector:
+    matchLabels: {app: npu-exporter}
+  template:
+    metadata:
+      labels: {app: npu-exporter, app.kubernetes.io/part-of: modelpilot}
+    spec:
+      automountServiceAccountToken: false
+      nodeSelector: {modelpilot.io/device-observation: "true"}
+      containers:
+        - name: npu-exporter
+          image: REGISTRY/modelpilot/npu-exporter:VERIFIED_IMMUTABLE_TAG
+          imagePullPolicy: IfNotPresent
+          command: [/bin/bash, -c, --]
+          args:
+            - umask 027; exec npu-exporter -port=8082 -ip=0.0.0.0 -logFile=/var/log/npu-exporter.log -logLevel=0 -containerMode=containerd -containerd=unix:///run/k3s/containerd/containerd.sock --enable-healthz=true --healthz-address=11256
+          ports: [{name: metrics, containerPort: 8082}, {name: health, containerPort: 11256}]
+          startupProbe: {httpGet: {path: /, port: health}, periodSeconds: 5, failureThreshold: 30}
+          readinessProbe: {httpGet: {path: /, port: health}, periodSeconds: 15}
+          livenessProbe: {httpGet: {path: /, port: health}, periodSeconds: 15, timeoutSeconds: 5}
+          resources: {requests: {cpu: 250m, memory: 256Mi}, limits: {cpu: "1", memory: 1Gi}}
+          securityContext: {privileged: true, readOnlyRootFilesystem: true, runAsUser: 0}
+          volumeMounts:
+            - {name: driver, mountPath: /usr/local/Ascend/driver, readOnly: true}
+            - {name: dcmi, mountPath: /usr/local/dcmi, readOnly: true}
+            - {name: runtime, mountPath: /run/k3s/containerd, readOnly: true}
+            - {name: log, mountPath: /var/log}
+            - {name: tmp, mountPath: /tmp}
+      volumes:
+        - {name: driver, hostPath: {path: /usr/local/Ascend/driver, type: Directory}}
+        - {name: dcmi, hostPath: {path: /usr/local/dcmi, type: Directory}}
+        - {name: runtime, hostPath: {path: /run/k3s/containerd, type: Directory}}
+        - {name: log, emptyDir: {sizeLimit: 64Mi}}
+        - {name: tmp, emptyDir: {sizeLimit: 64Mi}}
+---
+apiVersion: networking.k8s.io/v1
+kind: NetworkPolicy
+metadata: {name: npu-exporter, namespace: npu-exporter}
+spec:
+  podSelector: {matchLabels: {app: npu-exporter}}
+  policyTypes: [Ingress, Egress]
+  ingress:
+    - from:
+        - namespaceSelector: {matchLabels: {kubernetes.io/metadata.name: monitoring}}
+          podSelector: {matchLabels: {app.kubernetes.io/name: model-metrics}}
+      ports: [{protocol: TCP, port: 8082}]
+  egress: []

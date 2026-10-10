@@ -64,6 +64,9 @@ data:
       scrape_timeout: 10s
       evaluation_interval: 15s
 
+    rule_files:
+      - /etc/prometheus/device-rules.yml
+
     scrape_configs:
       # Optional: targets appear only when the MindCluster exporter is deployed.
       - job_name: npu-exporter
@@ -80,11 +83,37 @@ data:
           - source_labels: [__meta_kubernetes_pod_label_app]
             regex: npu-exporter
             action: keep
+          - source_labels: [__meta_kubernetes_pod_container_name, __meta_kubernetes_pod_container_port_number]
+            regex: npu-exporter;8082
+            action: keep
+          - target_label: cluster_id
+            replacement: installation-local
+          # Change only after real driver/profile acceptance, not merely deployment.
+          - target_label: exporter_profile
+            replacement: unverified
           - source_labels: [__meta_kubernetes_pod_ip]
             target_label: __address__
             replacement: $1:8082
           - source_labels: [__meta_kubernetes_pod_node_name]
             target_label: node
+      - job_name: node-exporter
+        kubernetes_sd_configs:
+          - role: pod
+            namespaces: {names: [monitoring]}
+        relabel_configs:
+          - source_labels: [__meta_kubernetes_pod_label_app_kubernetes_io_name]
+            regex: model-node-exporter
+            action: keep
+          - source_labels: [__meta_kubernetes_pod_phase]
+            regex: Running
+            action: keep
+          - source_labels: [__meta_kubernetes_pod_container_port_name]
+            regex: metrics
+            action: keep
+          - source_labels: [__meta_kubernetes_pod_node_name]
+            target_label: node
+          - target_label: cluster_id
+            replacement: installation-local
       - job_name: modelflow-router
         metrics_path: /metrics
         scheme: http
@@ -108,6 +137,57 @@ data:
             target_label: pod
           - source_labels: [__meta_kubernetes_pod_node_name]
             target_label: node
+  device-rules.yml: |
+    # Enabled only for a locally verified profile with chip-level physical IDs,
+    # ratio input percent, HBM MiB and chip power watts. 310P card power is excluded.
+    groups:
+      - name: modelpilot-device-observation
+        interval: 15s
+        rules:
+          - record: modelpilot_accelerator_core_utilization_ratio
+            expr: |
+              label_replace(
+                (max by (cluster_id,node,id) (npu_chip_info_utilization{exporter_profile="ascend-physical-percent-mib-watts-v1",id!="",vdie_id=""})
+                  == min by (cluster_id,node,id) (npu_chip_info_utilization{exporter_profile="ascend-physical-percent-mib-watts-v1",id!="",vdie_id=""})) >= 0 <= 100,
+                "physical_id", "$1", "id", "(.+)"
+              ) / 100
+          - record: modelpilot_accelerator_memory_used_bytes
+            labels: {memory_kind: hbm}
+            expr: |
+              label_replace(
+                (max by (cluster_id,node,id) (npu_chip_info_hbm_used_memory{exporter_profile="ascend-physical-percent-mib-watts-v1",id!="",vdie_id=""})
+                  == min by (cluster_id,node,id) (npu_chip_info_hbm_used_memory{exporter_profile="ascend-physical-percent-mib-watts-v1",id!="",vdie_id=""})) >= 0 < +Inf,
+                "physical_id", "$1", "id", "(.+)"
+              ) * 1048576
+          - record: modelpilot_accelerator_memory_total_bytes
+            labels: {memory_kind: hbm}
+            expr: |
+              label_replace(
+                (max by (cluster_id,node,id) (npu_chip_info_hbm_total_memory{exporter_profile="ascend-physical-percent-mib-watts-v1",id!="",vdie_id=""})
+                  == min by (cluster_id,node,id) (npu_chip_info_hbm_total_memory{exporter_profile="ascend-physical-percent-mib-watts-v1",id!="",vdie_id=""})) > 0 < +Inf,
+                "physical_id", "$1", "id", "(.+)"
+              ) * 1048576
+          - record: modelpilot_accelerator_temperature_celsius
+            labels: {sensor: chip}
+            expr: |
+              label_replace(
+                (max by (cluster_id,node,id) (npu_chip_info_temperature{exporter_profile="ascend-physical-percent-mib-watts-v1",id!="",vdie_id=""})
+                  == min by (cluster_id,node,id) (npu_chip_info_temperature{exporter_profile="ascend-physical-percent-mib-watts-v1",id!="",vdie_id=""})) >= 0 < +Inf,
+                "physical_id", "$1", "id", "(.+)"
+              )
+          - record: modelpilot_accelerator_power_watts
+            expr: |
+              label_replace(
+                (max by (cluster_id,node,id) (npu_chip_info_power{exporter_profile="ascend-physical-percent-mib-watts-v1",id!="",vdie_id=""})
+                  == min by (cluster_id,node,id) (npu_chip_info_power{exporter_profile="ascend-physical-percent-mib-watts-v1",id!="",vdie_id=""})) >= 0 < +Inf,
+                "physical_id", "$1", "id", "(.+)"
+              )
+          - record: modelpilot_node_cpu_utilization_ratio
+            expr: 1 - avg by (cluster_id,node) (rate(node_cpu_seconds_total{job="node-exporter",mode="idle"}[5m]))
+          - record: modelpilot_node_memory_available_bytes
+            expr: max by (cluster_id,node) (node_memory_MemAvailable_bytes{job="node-exporter"})
+          - record: modelpilot_node_memory_total_bytes
+            expr: max by (cluster_id,node) (node_memory_MemTotal_bytes{job="node-exporter"})
 ---
 apiVersion: v1
 kind: PersistentVolumeClaim
@@ -296,3 +376,11 @@ spec:
       ports:
         - protocol: TCP
           port: 8082
+    # node_exporter uses hostNetwork. Restrict this CIDR to selected node addresses
+    # in the installation; CNI host traffic enforcement must be verified.
+    - to:
+        - ipBlock:
+            cidr: 0.0.0.0/0
+      ports:
+        - protocol: TCP
+          port: 9100
