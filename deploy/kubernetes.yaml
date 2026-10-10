@@ -267,13 +267,15 @@ spec:
           port: 53
         - protocol: TCP
           port: 53
-    # K3s environment baseline: kubernetes.default.svc = 10.43.0.1.
+    # K3s environment baseline: kubernetes.default.svc
     - to:
         - ipBlock:
-            cidr: 10.43.0.1/32
+            cidr: 0.0.0.0/0
       ports:
         - protocol: TCP
           port: 443
+        - protocol: TCP
+          port: 6443
     - to:
         - namespaceSelector:
             matchLabels:
