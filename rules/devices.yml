@@ -7,39 +7,39 @@ groups:
       - record: modelpilot_accelerator_core_utilization_ratio
         expr: |
           label_replace(
-            (max by (cluster_id,node,id) (npu_chip_info_utilization{exporter_profile="ascend-physical-percent-mib-watts-v1",id!="",vdie_id=""})
-              == min by (cluster_id,node,id) (npu_chip_info_utilization{exporter_profile="ascend-physical-percent-mib-watts-v1",id!="",vdie_id=""})) >= 0 <= 100,
+            (max by (cluster_id,node,id) (npu_chip_info_utilization{exporter_profile="ascend-physical-percent-mib-watts-v1",id!=""})
+              == min by (cluster_id,node,id) (npu_chip_info_utilization{exporter_profile="ascend-physical-percent-mib-watts-v1",id!=""})) >= 0 <= 100,
             "physical_id", "$1", "id", "(.+)"
           ) / 100
       - record: modelpilot_accelerator_memory_used_bytes
         labels: {memory_kind: hbm}
         expr: |
           label_replace(
-            (max by (cluster_id,node,id) (npu_chip_info_hbm_used_memory{exporter_profile="ascend-physical-percent-mib-watts-v1",id!="",vdie_id=""})
-              == min by (cluster_id,node,id) (npu_chip_info_hbm_used_memory{exporter_profile="ascend-physical-percent-mib-watts-v1",id!="",vdie_id=""})) >= 0 < +Inf,
+            (max by (cluster_id,node,id) (npu_chip_info_hbm_used_memory{exporter_profile="ascend-physical-percent-mib-watts-v1",id!=""})
+              == min by (cluster_id,node,id) (npu_chip_info_hbm_used_memory{exporter_profile="ascend-physical-percent-mib-watts-v1",id!=""})) >= 0 < +Inf,
             "physical_id", "$1", "id", "(.+)"
           ) * 1048576
       - record: modelpilot_accelerator_memory_total_bytes
         labels: {memory_kind: hbm}
         expr: |
           label_replace(
-            (max by (cluster_id,node,id) (npu_chip_info_hbm_total_memory{exporter_profile="ascend-physical-percent-mib-watts-v1",id!="",vdie_id=""})
-              == min by (cluster_id,node,id) (npu_chip_info_hbm_total_memory{exporter_profile="ascend-physical-percent-mib-watts-v1",id!="",vdie_id=""})) > 0 < +Inf,
+            (max by (cluster_id,node,id) (npu_chip_info_hbm_total_memory{exporter_profile="ascend-physical-percent-mib-watts-v1",id!=""})
+              == min by (cluster_id,node,id) (npu_chip_info_hbm_total_memory{exporter_profile="ascend-physical-percent-mib-watts-v1",id!=""})) > 0 < +Inf,
             "physical_id", "$1", "id", "(.+)"
           ) * 1048576
       - record: modelpilot_accelerator_temperature_celsius
         labels: {sensor: chip}
         expr: |
           label_replace(
-            (max by (cluster_id,node,id) (npu_chip_info_temperature{exporter_profile="ascend-physical-percent-mib-watts-v1",id!="",vdie_id=""})
-              == min by (cluster_id,node,id) (npu_chip_info_temperature{exporter_profile="ascend-physical-percent-mib-watts-v1",id!="",vdie_id=""})) >= 0 < +Inf,
+            (max by (cluster_id,node,id) (npu_chip_info_temperature{exporter_profile="ascend-physical-percent-mib-watts-v1",id!=""})
+              == min by (cluster_id,node,id) (npu_chip_info_temperature{exporter_profile="ascend-physical-percent-mib-watts-v1",id!=""})) >= 0 < +Inf,
             "physical_id", "$1", "id", "(.+)"
           )
       - record: modelpilot_accelerator_power_watts
         expr: |
           label_replace(
-            (max by (cluster_id,node,id) (npu_chip_info_power{exporter_profile="ascend-physical-percent-mib-watts-v1",id!="",vdie_id=""})
-              == min by (cluster_id,node,id) (npu_chip_info_power{exporter_profile="ascend-physical-percent-mib-watts-v1",id!="",vdie_id=""})) >= 0 < +Inf,
+            (max by (cluster_id,node,id) (npu_chip_info_power{exporter_profile="ascend-physical-percent-mib-watts-v1",id!=""})
+              == min by (cluster_id,node,id) (npu_chip_info_power{exporter_profile="ascend-physical-percent-mib-watts-v1",id!=""})) >= 0 < +Inf,
             "physical_id", "$1", "id", "(.+)"
           )
       - record: modelpilot_node_cpu_utilization_ratio
