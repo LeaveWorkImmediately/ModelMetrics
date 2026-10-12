@@ -1,5 +1,11 @@
 # Adapted from mind-cluster commit 7537ed628111e89f82e4823cd36b2c983d86ab6b.
 # Installation input: verified exporter image digest and driver/runtime paths.
+# 注意：containerd socket 路径因节点而异：
+#   k3s 节点: /run/k3s/containerd/containerd.sock
+#   标准节点: /run/containerd/containerd.sock
+# 如果多节点运行时不同，去掉 runtime volume 的 type: Directory 或改为空字符串，
+# 避免路径不存在时 Pod 卡在 Init:0/1。
+# 910B4 硬件上 vdie_id 标签始终非空，device-rules.yml 中不要过滤 vdie_id=""。
 apiVersion: v1
 kind: Namespace
 metadata: {name: npu-exporter}
@@ -41,7 +47,7 @@ spec:
       volumes:
         - {name: driver, hostPath: {path: /usr/local/Ascend/driver, type: Directory}}
         - {name: dcmi, hostPath: {path: /usr/local/dcmi, type: Directory}}
-        - {name: runtime, hostPath: {path: /run/k3s/containerd, type: Directory}}
+        - {name: runtime, hostPath: {path: /run/k3s/containerd}}
         - {name: log, emptyDir: {sizeLimit: 64Mi}}
         - {name: tmp, emptyDir: {sizeLimit: 64Mi}}
 ---

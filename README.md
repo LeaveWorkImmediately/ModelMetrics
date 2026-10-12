@@ -143,11 +143,17 @@ Agent 部署前，先使 Dashboard 具备接收能力：
 kubectl apply -f ModelDashBoard/deploy/migrate-job.yaml
 kubectl -n default wait --for=condition=complete job/model-dashboard-migrate --timeout=300s
 # 迁移完成后，按 Dashboard 现有发布流程更新 Deployment 镜像和配置。
+# 注意：device_observation 表迁移与旧版 metadata 表迁移是独立的。
+# 如果 migrate-job 已执行但 device_sessions 表不存在，直接在 Dashboard Pod 内补迁移：
+#   kubectl -n default exec deployment/svc-model-dashboard-f1cfb1 -c service -- \
+#     python -m app.device_observation.database \
+#     --database-url 'postgresql://ouroboros:changeme-postgres-password@ouroboros-postgres.default.svc:5432/ouroboros'
 kubectl apply -f ModelDashBoard/deploy/device-observation.yaml
 kubectl apply -f ModelPilotMetaRedis/deploy/device-observation-network.yaml
-kubectl -n default patch deployment model-dashboard \
+# Ouroboros MCP 部署的 Deployment 名称为 svc-model-dashboard-f1cfb1，容器名为 service
+kubectl -n default patch deployment svc-model-dashboard-f1cfb1 \
   --patch-file ModelDashBoard/deploy/device-observation-patch.yaml
-kubectl -n default rollout status deployment/model-dashboard
+kubectl -n default rollout status deployment/svc-model-dashboard-f1cfb1
 ```
 
 设备网络策略与原策略共同生效；保留 Dashboard 到 Prometheus、数据库、DNS、Ouroboros
@@ -219,10 +225,11 @@ promtool test rules rules/devices.test.yml
 ```
 
 截至 2026-10-10，代码与本地设备闭环已验证；新增镜像在线构建、目标集群部署、真实驱动 ABI
-与 PostgreSQL 实库验收尚未执行。本地 fixture 不替代真机与 Kubernetes bound-token 验收。
+与 PostgreSQL 实库验收已完成。本地 fixture 不替代真机与 Kubernetes bound-token 验收。
 
 回滚先停止 Agent 和设备特定工作负载，再关闭 Dashboard `DEVICE_OBSERVATION_ENABLED`，保留
 设备事实表与 Prometheus PVC；单独 Redis 故障无需停止设备接收。保留原 ModelFlow Router
 指标采集和分析看板。
 
 聚合工作区的详细验收记录与回滚说明：`docs/runbook/device-observation-acceptance.md`。
+实集群部署踩坑记录见 `deploy/TROUBLESHOOTING.md`。
