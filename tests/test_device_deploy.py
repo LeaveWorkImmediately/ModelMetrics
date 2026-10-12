@@ -15,19 +15,20 @@ def test_daemonset_machine_identity_and_host_mounts():
     assert token["projected"]["sources"][0]["serviceAccountToken"]["audience"] == "modeldashboard-device-observation"
     assert all(mount["readOnly"] for mount in pod["containers"][0]["volumeMounts"])
     assert "startupProbe" in pod["containers"][0] and "readinessProbe" in pod["containers"][0]
-    config = next(item for item in resources if item["kind"] == "ConfigMap")
-    assert config["data"]["INVENTORY_PROFILE_VERIFIED"] == "false"
+    # The accepted cluster's ConfigMap/SA/RBAC are managed separately.
+    assert pod["containers"][0]["envFrom"] == [{"configMapRef": {"name": "model-device-agent-config"}}]
 
 
-def test_rules_match_deployed_config_and_scrape_is_unique():
+def test_external_rules_reference_and_scrape_is_unique():
     resources = list(yaml.safe_load_all((ROOT / "deploy/kubernetes.yaml").read_text()))
     config = next(item for item in resources if item["kind"] == "ConfigMap")["data"]
-    assert config["device-rules.yml"].strip() == (ROOT / "rules/devices.yml").read_text().strip()
+    rules = yaml.safe_load((ROOT / "rules/devices.yml").read_text())
+    assert len([rule for group in rules["groups"] for rule in group["rules"]]) == 8
     prometheus = yaml.safe_load(config["prometheus.yml"])
     assert prometheus["rule_files"] == ["/etc/prometheus/device-rules.yml"]
     npu = next(job for job in prometheus["scrape_configs"] if job["job_name"] == "npu-exporter")
     assert any(rule.get("regex") == "npu-exporter;8082" for rule in npu["relabel_configs"])
-    assert any(rule.get("target_label") == "exporter_profile" and rule["replacement"] == "unverified" for rule in npu["relabel_configs"])
+    assert any(rule.get("target_label") == "exporter_profile" and rule["replacement"] == "ascend-physical-percent-mib-watts-v1" for rule in npu["relabel_configs"])
 
 
 def test_git_and_local_builds_use_same_runtime():

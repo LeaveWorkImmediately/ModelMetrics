@@ -1,13 +1,18 @@
 schemaVersion: modelpilot.ascend-exporter-profiles/v1alpha1
 profiles:
   - id: ascend-physical-percent-mib-watts-v1
-    validationStatus: unverified
-    # Fill all fields from actual exporter/driver/hardware acceptance before enabling.
+    validationStatus: cluster_verified
+    validationDate: "2026-10-12"
+    validationEvidence: "User-confirmed deployed chain passed; see ../deploy/TROUBLESHOOTING.md (k3s, two nodes, 16 physical 910B4 chips)."
+    # Release provenance remains to be archived; do not invent a source commit/digest.
+    provenanceStatus: pending_archive
+    exporterImage: swr.cn-south-1.myhuaweicloud.com/ascendhub/npu-exporter:v26.1.0-openeuler24.03
     sourceCommit: null
     imageDigest: null
     driverRange: null
-    hardwareTypes: [Ascend910B]
-    identityMapping: {id: physical_id, vdie_id: "empty physical-only"}
+    hardwareTypes: [Ascend910B4]
+    identityMapping: {id: physical_id, vdie_id: "nonempty on accepted physical 910B4 chips; not a physical/virtual discriminator"}
+    applicability: "Accepted physical 910B4 deployment only; vNPU and other hardware require separate verification."
     units: {utilization: percent, hbm: MiB, temperature: celsius, power: watts}
     scrapeIntervalSeconds: 15
     collectorIntervals: null

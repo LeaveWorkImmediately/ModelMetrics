@@ -22,7 +22,8 @@ tests:
         values: 50x4
       - series: npu_chip_info_utilization{cluster_id="cluster-a",node="node-a",id="6",exporter_profile="unverified"}
         values: 80x4
-      - series: npu_chip_info_utilization{cluster_id="cluster-a",node="node-a",id="7",vdie_id="0",exporter_profile="ascend-physical-percent-mib-watts-v1"}
+      # 910B4 physical chips have a nonempty vdie_id; it is not a vNPU discriminator.
+      - series: npu_chip_info_utilization{cluster_id="cluster-a",node="node-a",id="7",vdie_id="6E03EE6C-80A04CD9",exporter_profile="ascend-physical-percent-mib-watts-v1"}
         values: 80x4
       - series: npu_chip_info_hbm_used_memory{cluster_id="cluster-a",node="node-a",id="0",exporter_profile="ascend-physical-percent-mib-watts-v1"}
         values: 1024x4
@@ -42,6 +43,8 @@ tests:
             value: 0
           - labels: modelpilot_accelerator_core_utilization_ratio{cluster_id="cluster-a",node="node-a",id="4",physical_id="4"}
             value: 0.4
+          - labels: modelpilot_accelerator_core_utilization_ratio{cluster_id="cluster-a",node="node-a",id="7",physical_id="7"}
+            value: 0.8
       - expr: modelpilot_accelerator_memory_used_bytes
         eval_time: 1m
         exp_samples:

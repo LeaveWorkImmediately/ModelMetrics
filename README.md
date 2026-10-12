@@ -220,11 +220,12 @@ go test ./...
 cd ..
 python -m pytest tests
 python scripts/sync_device_rules.py --check
+# 当前清单不嵌入规则：该检查明确跳过内嵌比较，规则源仍需以下 promtool 验证。
 promtool check rules rules/devices.yml
 promtool test rules rules/devices.test.yml
 ```
 
-截至 2026-10-10，代码与本地设备闭环已验证；新增镜像在线构建、目标集群部署、真实驱动 ABI
+截至 2026-10-12，代码、本地设备闭环及用户确认的真实部署已验证；新增镜像在线构建、目标集群部署、真实驱动 ABI
 与 PostgreSQL 实库验收已完成。本地 fixture 不替代真机与 Kubernetes bound-token 验收。
 
 回滚先停止 Agent 和设备特定工作负载，再关闭 Dashboard `DEVICE_OBSERVATION_ENABLED`，保留
@@ -233,3 +234,9 @@ promtool test rules rules/devices.test.yml
 
 聚合工作区的详细验收记录与回滚说明：`docs/runbook/device-observation-acceptance.md`。
 实集群部署踩坑记录见 `deploy/TROUBLESHOOTING.md`。
+
+## 2026-10-12 配套收口
+
+保留真实环境验证的 deploy 文件，不恢复原全量模板。当前 Agent ConfigMap/SA/RBAC、Prometheus 规则及部分工作负载由既有集群配置提供；上面的模板安装步骤保留为历史参考，现场以 deploy/TROUBLESHOOTING.md 和已验证配置为准。deploy-all.sh 是现场操作记录，不是新集群一键安装器。
+
+profile 已限定为经过验收的物理 910B4 环境；非空 vdie_id 不能用于推断虚拟设备。未归档的 imageDigest、源 commit、驱动版本和 collector 周期保持待补录；不扩大到 vNPU 或其他硬件。

@@ -11,6 +11,11 @@ text = path.read_text(encoding="utf-8-sig")
 rules = (root / "rules/devices.yml").read_text(encoding="utf-8").rstrip()
 embedded = "  device-rules.yml: |\n" + "\n".join("    " + line for line in rules.splitlines()) + "\n"
 marker = "---\napiVersion: v1\nkind: PersistentVolumeClaim"
+if "  device-rules.yml: |\n" not in text and marker not in text:
+    if args.check:
+        print("No embedded device-rules.yml: rules/devices.yml is managed separately in the accepted cluster; embedded drift check skipped. Run promtool for source validation.")
+        raise SystemExit(0)
+    raise SystemExit("No embedded rules target in the accepted deployment; refusing to rewrite deploy/kubernetes.yaml.")
 if "  device-rules.yml: |\n" in text:
     start = text.index("  device-rules.yml: |\n")
     end = text.index(marker, start)
