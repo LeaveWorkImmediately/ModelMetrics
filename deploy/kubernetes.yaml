@@ -94,3 +94,99 @@ data:
           - source_labels: [__meta_kubernetes_pod_ip]
             target_label: __address__
             replacement: $1:8082
+          - source_labels: [__meta_kubernetes_pod_node_name]
+            target_label: node
+
+      - job_name: node-exporter
+        metrics_path: /metrics
+        scheme: http
+        kubernetes_sd_configs:
+          - role: pod
+            namespaces:
+              names: [monitoring]
+        relabel_configs:
+          - source_labels: [__meta_kubernetes_pod_label_app_kubernetes_io_name]
+            regex: model-node-exporter
+            action: keep
+          - source_labels: [__meta_kubernetes_pod_phase]
+            regex: Running
+            action: keep
+          - source_labels: [__meta_kubernetes_pod_container_port_name]
+            regex: metrics
+            action: keep
+          - source_labels: [__meta_kubernetes_pod_node_name]
+            target_label: node
+          - target_label: cluster_id
+            replacement: installation-local
+          - source_labels: [__meta_kubernetes_pod_ip]
+            target_label: __address__
+            replacement: $1:9100
+
+      - job_name: modelflow-router
+        metrics_path: /metrics
+        scheme: http
+        kubernetes_sd_configs:
+          - role: pod
+            namespaces:
+              names: [default]
+        relabel_configs:
+          - source_labels: [__meta_kubernetes_pod_label_app_kubernetes_io_name]
+            regex: modelflow-router
+            action: keep
+          - source_labels: [__meta_kubernetes_pod_phase]
+            regex: Running
+            action: keep
+          - source_labels: [__meta_kubernetes_pod_container_port_name]
+            regex: metrics
+            action: keep
+          - source_labels: [__meta_kubernetes_namespace]
+            target_label: namespace
+          - source_labels: [__meta_kubernetes_pod_name]
+            target_label: pod
+          - source_labels: [__meta_kubernetes_pod_node_name]
+            target_label: node
+          - target_label: cluster_id
+            replacement: installation-local
+
+  device-rules.yml: |
+    # Enabled only for a locally verified profile with chip-level physical IDs,
+    # ratio input percent, HBM MiB and chip power watts. 310P card power is excluded.
+    # 910B4 hardware: vdie_id is always non-empty, do NOT filter vdie_id="".
+    groups:
+      - name: modelpilot-device-observation
+        interval: 15s
+        rules:
+          - record: modelpilot_accelerator_core_utilization_ratio
+            expr: |
+              label_replace(
+                (max by (cluster_id,node,id) (npu_chip_info_utilization{exporter_profile="ascend-physical-percent-mib-watts-v1",id!=""})
+                  == min by (cluster_id,node,id) (npu_chip_info_utilization{exporter_profile="ascend-physical-percent-mib-watts-v1",id!=""})) >= 0 <= 100,
+                "physical_id", "$1", "id", "(.+)"
+              ) / 100
+          - record: modelpilot_accelerator_memory_used_bytes
+            labels: {memory_kind: hbm}
+            expr: |
+              label_replace(
+                (max by (cluster_id,node,id) (npu_chip_info_hbm_used_memory{exporter_profile="ascend-physical-percent-mib-watts-v1",id!=""})
+                  == min by (cluster_id,node,id) (npu_chip_info_hbm_used_memory{exporter_profile="ascend-physical-percent-mib-watts-v1",id!=""})) >= 0 < +Inf,
+                "physical_id", "$1", "id", "(.+)"
+              ) * 1048576
+          - record: modelpilot_accelerator_memory_total_bytes
+            labels: {memory_kind: hbm}
+            expr: |
+              label_replace(
+                (max by (cluster_id,node,id) (npu_chip_info_hbm_total_memory{exporter_profile="ascend-physical-percent-mib-watts-v1",id!=""})
+                  == min by (cluster_id,node,id) (npu_chip_info_hbm_total_memory{exporter_profile="ascend-physical-percent-mib-watts-v1",id!=""})) > 0 < +Inf,
+                "physical_id", "$1", "id", "(.+)"
+              ) * 1048576
+          - record: modelpilot_accelerator_temperature_celsius
+            labels: {sensor: chip}
+            expr: |
+              label_replace(
+                (max by (cluster_id,node,id) (npu_chip_info_temperature{exporter_profile="ascend-physical-percent-mib-watts-v1",id!=""})
+                  == min by (cluster_id,node,id) (npu_chip_info_temperature{exporter_profile="ascend-physical-percent-mib-watts-v1",id!=""})) >= 0 < +Inf,
+                "physical_id", "$1", "id", "(.+)"
+              )
+          - record: modelpilot_accelerator_power_watts
+            expr: |
+              label_replace(

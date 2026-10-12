@@ -25,9 +25,9 @@ spec:
             - --path.rootfs=/host/root
             - --collector.filesystem.mount-points-exclude=^/(dev|proc|sys|var/lib/(docker|containers|kubelet))($|/)
           ports: [{name: metrics, containerPort: 9100}]
-          readinessProbe: {httpGet: {path: /metrics, port: metrics}, periodSeconds: 15}
-          livenessProbe: {httpGet: {path: /metrics, port: metrics}, periodSeconds: 30}
-          resources: {requests: {cpu: 50m, memory: 32Mi}, limits: {cpu: 200m, memory: 96Mi}}
+          readinessProbe: {httpGet: {path: /, port: metrics}, periodSeconds: 15, timeoutSeconds: 10}
+          livenessProbe: {httpGet: {path: /, port: metrics}, periodSeconds: 30, timeoutSeconds: 10}
+          resources: {requests: {cpu: 100m, memory: 64Mi}, limits: {cpu: 500m, memory: 256Mi}}
           securityContext: {allowPrivilegeEscalation: false, readOnlyRootFilesystem: true, capabilities: {drop: [ALL]}}
           volumeMounts:
             - {name: proc, mountPath: /host/proc, readOnly: true}
