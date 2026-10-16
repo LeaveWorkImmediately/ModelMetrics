@@ -1,0 +1,30 @@
+FROM golang:1.23-bookworm AS build
+ARG HTTP_PROXY
+ARG HTTPS_PROXY
+ARG NO_PROXY
+ENV http_proxy=${HTTP_PROXY} https_proxy=${HTTPS_PROXY} no_proxy=${NO_PROXY}
+ARG GIT_REPO_URL
+ARG GIT_REF=main
+ARG GIT_TOKEN
+ARG CACHEBUST=1
+RUN git config --global http.sslVerify false && \
+    git_proxy="${HTTPS_PROXY:-${HTTP_PROXY}}" && \
+    if [ -n "$git_proxy" ]; then \
+      git config --global http.proxy "$git_proxy"; \
+    fi && \
+    test -n "${CACHEBUST}" && test -n "${GIT_REPO_URL}" && \
+    if [ -z "${GIT_TOKEN}" ]; then \
+      git clone --depth 1 -b "${GIT_REF}" "${GIT_REPO_URL}" /source; \
+    else \
+      case "${GIT_REPO_URL}" in https://*) ;; *) exit 1 ;; esac && \
+      git clone --depth 1 -b "${GIT_REF}" "https://${GIT_TOKEN}@${GIT_REPO_URL#https://}" /source && \
+      git -C /source remote set-url origin "${GIT_REPO_URL}"; \
+    fi
+WORKDIR /source/agent
+RUN go test ./... && CGO_ENABLED=0 go build -trimpath -o /model-device-agent .
+FROM python:3.12-slim-bookworm
+COPY --from=build /model-device-agent /usr/local/bin/model-device-agent
+COPY --from=build /source/agent/dcmi_inventory.py /usr/local/lib/model-device-agent/dcmi_inventory.py
+ENV PYTHONDONTWRITEBYTECODE=1 PYTHONUNBUFFERED=1
+EXPOSE 8081
+ENTRYPOINT ["/usr/local/bin/model-device-agent"]

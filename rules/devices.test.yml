@@ -1,0 +1,67 @@
+rule_files: [devices.yml]
+evaluation_interval: 15s
+tests:
+  - name: physical_identity_units_duplicates_and_invalid_samples
+    interval: 15s
+    input_series:
+      - series: npu_chip_info_utilization{cluster_id="cluster-a",node="node-a",id="0",exporter_profile="ascend-physical-percent-mib-watts-v1"}
+        values: 50x4
+      - series: npu_chip_info_utilization{cluster_id="cluster-a",node="node-a",id="1",exporter_profile="ascend-physical-percent-mib-watts-v1"}
+        values: 0x4
+      - series: npu_chip_info_utilization{cluster_id="cluster-a",node="node-a",id="2",exporter_profile="ascend-physical-percent-mib-watts-v1"}
+        values: -1x4
+      - series: npu_chip_info_utilization{cluster_id="cluster-a",node="node-a",id="3",exporter_profile="ascend-physical-percent-mib-watts-v1"}
+        values: 101x4
+      - series: npu_chip_info_utilization{cluster_id="cluster-a",node="node-a",id="4",namespace="a",exporter_profile="ascend-physical-percent-mib-watts-v1"}
+        values: 40x4
+      - series: npu_chip_info_utilization{cluster_id="cluster-a",node="node-a",id="4",namespace="b",exporter_profile="ascend-physical-percent-mib-watts-v1"}
+        values: 40x4
+      - series: npu_chip_info_utilization{cluster_id="cluster-a",node="node-a",id="5",namespace="a",exporter_profile="ascend-physical-percent-mib-watts-v1"}
+        values: 40x4
+      - series: npu_chip_info_utilization{cluster_id="cluster-a",node="node-a",id="5",namespace="b",exporter_profile="ascend-physical-percent-mib-watts-v1"}
+        values: 50x4
+      - series: npu_chip_info_utilization{cluster_id="cluster-a",node="node-a",id="6",exporter_profile="unverified"}
+        values: 80x4
+      # 910B4 physical chips have a nonempty vdie_id; it is not a vNPU discriminator.
+      - series: npu_chip_info_utilization{cluster_id="cluster-a",node="node-a",id="7",vdie_id="6E03EE6C-80A04CD9",exporter_profile="ascend-physical-percent-mib-watts-v1"}
+        values: 80x4
+      - series: npu_chip_info_hbm_used_memory{cluster_id="cluster-a",node="node-a",id="0",exporter_profile="ascend-physical-percent-mib-watts-v1"}
+        values: 1024x4
+      - series: npu_chip_info_hbm_total_memory{cluster_id="cluster-a",node="node-a",id="0",exporter_profile="ascend-physical-percent-mib-watts-v1"}
+        values: 32768x4
+      - series: npu_chip_info_temperature{cluster_id="cluster-a",node="node-a",id="0",exporter_profile="ascend-physical-percent-mib-watts-v1"}
+        values: 52x4
+      - series: npu_chip_info_power{cluster_id="cluster-a",node="node-a",id="0",exporter_profile="ascend-physical-percent-mib-watts-v1"}
+        values: 123x4
+    promql_expr_test:
+      - expr: modelpilot_accelerator_core_utilization_ratio
+        eval_time: 1m
+        exp_samples:
+          - labels: modelpilot_accelerator_core_utilization_ratio{cluster_id="cluster-a",node="node-a",id="0",physical_id="0"}
+            value: 0.5
+          - labels: modelpilot_accelerator_core_utilization_ratio{cluster_id="cluster-a",node="node-a",id="1",physical_id="1"}
+            value: 0
+          - labels: modelpilot_accelerator_core_utilization_ratio{cluster_id="cluster-a",node="node-a",id="4",physical_id="4"}
+            value: 0.4
+          - labels: modelpilot_accelerator_core_utilization_ratio{cluster_id="cluster-a",node="node-a",id="7",physical_id="7"}
+            value: 0.8
+      - expr: modelpilot_accelerator_memory_used_bytes
+        eval_time: 1m
+        exp_samples:
+          - labels: modelpilot_accelerator_memory_used_bytes{cluster_id="cluster-a",node="node-a",id="0",physical_id="0",memory_kind="hbm"}
+            value: 1073741824
+      - expr: modelpilot_accelerator_memory_total_bytes
+        eval_time: 1m
+        exp_samples:
+          - labels: modelpilot_accelerator_memory_total_bytes{cluster_id="cluster-a",node="node-a",id="0",physical_id="0",memory_kind="hbm"}
+            value: 34359738368
+      - expr: modelpilot_accelerator_temperature_celsius
+        eval_time: 1m
+        exp_samples:
+          - labels: modelpilot_accelerator_temperature_celsius{cluster_id="cluster-a",node="node-a",id="0",physical_id="0",sensor="chip"}
+            value: 52
+      - expr: modelpilot_accelerator_power_watts
+        eval_time: 1m
+        exp_samples:
+          - labels: modelpilot_accelerator_power_watts{cluster_id="cluster-a",node="node-a",id="0",physical_id="0"}
+            value: 123
